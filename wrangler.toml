@@ -1,0 +1,11 @@
+# Cloudflare Pages 本地开发配置
+# 生产环境请在 Pages 控制台绑定 KV（见 README 说明），此文件仅用于本地预览
+
+name = "qingci-stats"
+compatibility_date = "2024-11-01"
+
+# 本地开发前先创建 KV 命名空间并把 id 填进来：
+#   npx wrangler kv namespace create QINGCI_STATS
+[[kv_namespaces]]
+binding = "STATS_KV"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"

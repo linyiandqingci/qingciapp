@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>清辞内核 · 实时使用监控</title>
+<style>
+  :root {
+    --bg: #0b0614;
+    --purple-1: #7c3aed;
+    --purple-2: #a855f7;
+    --purple-3: #c084fc;
+    --pink: #d946ef;
+    --pink-light: #f0abfc;
+    --glass: rgba(255, 255, 255, 0.06);
+    --glass-border: rgba(255, 255, 255, 0.12);
+    --text: #f3eaff;
+    --text-dim: #b9a6d9;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  /* ---------- 背景光晕 ---------- */
+  .bg-orbs {
+    position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  }
+  .orb {
+    position: absolute; border-radius: 50%;
+    filter: blur(90px); opacity: .55;
+  }
+  .orb-1 { width: 480px; height: 480px; top: -160px; left: -120px;
+           background: radial-gradient(circle, #7c3aed, transparent 70%); }
+  .orb-2 { width: 420px; height: 420px; top: 20%; right: -140px;
+           background: radial-gradient(circle, #d946ef, transparent 70%); }
+  .orb-3 { width: 380px; height: 380px; bottom: -140px; left: 30%;
+           background: radial-gradient(circle, #a855f7, transparent 70%); }
+
+  /* 星尘粒子 */
+  .stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .8; }
+
+  .wrap {
+    position: relative; z-index: 1;
+    max-width: 1100px; margin: 0 auto; padding: 36px 20px 48px;
+  }
+
+  /* ---------- 顶部 ---------- */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 28px; flex-wrap: wrap; gap: 14px;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .logo {
+    width: 46px; height: 46px; border-radius: 14px;
+    background: linear-gradient(135deg, #7c3aed, #d946ef);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 20px; color: #fff;
+    box-shadow: 0 0 24px rgba(168, 85, 247, .65);
+  }
+  .brand h1 {
+    font-size: 22px; font-weight: 700; letter-spacing: 1px;
+    background: linear-gradient(90deg, #e9d5ff, #f0abfc, #c084fc);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+  }
+  .brand p { font-size: 12px; color: var(--text-dim); margin-top: 3px; }
+
+  .status-pill {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 16px; border-radius: 999px;
+    background: var(--glass); border: 1px solid var(--glass-border);
+    backdrop-filter: blur(12px); font-size: 13px; color: var(--text-dim);
+  }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: #22c55e;
+         box-shadow: 0 0 10px #22c55e; animation: pulse 1.6s infinite; }
+  .dot.off { background: #ef4444; box-shadow: 0 0 10px #ef4444; animation: none; }
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.5); opacity: .55; }
+  }
+
+  /* ---------- 统计卡片 ---------- */
+  .stats {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 18px; margin-bottom: 22px;
+  }
+  .card {
+    position: relative; overflow: hidden;
+    background: linear-gradient(160deg, rgba(168,85,247,.14), rgba(124,58,237,.05) 55%, rgba(217,70,239,.10));
+    border: 1px solid var(--glass-border);
+    border-radius: 20px; padding: 24px 22px;
+    backdrop-filter: blur(16px);
+    transition: transform .25s, box-shadow .25s;
+  }
+  .card:hover { transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(168, 85, 247, .28); }
+  .card::before {
+    content: ""; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, #c084fc, #f0abfc, transparent);
+  }
+  .card .label { font-size: 13px; color: var(--text-dim); letter-spacing: 1px; }
+  .card .num {
+    font-size: 44px; font-weight: 800; margin: 10px 0 6px; line-height: 1;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(180deg, #ffffff, #d8b4fe);
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+    text-shadow: 0 0 30px rgba(192, 132, 252, .35);
+  }
+  .card .sub { font-size: 12px; color: var(--text-dim); }
+  .card .sub b { color: #e9d5ff; }
+
+  /* ---------- 主面板 ---------- */
+  .panel {
+    background: var(--glass);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px; padding: 22px;
+    backdrop-filter: blur(16px);
+    margin-bottom: 22px;
+  }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+  }
+  .panel-title {
+    font-size: 16px; font-weight: 700; display: flex; align-items: center; gap: 10px;
+  }
+  .panel-title .tag {
+    font-size: 11px; padding: 3px 10px; border-radius: 999px;
+    background: linear-gradient(135deg, rgba(124,58,237,.4), rgba(217,70,239,.4));
+    border: 1px solid rgba(240,171,252,.35); color: #f5d0fe; font-weight: 600;
+  }
+  .refresh { font-size: 12px; color: var(--text-dim);
+             font-variant-numeric: tabular-nums; }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left; font-size: 12px; font-weight: 600; color: var(--text-dim);
+    padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,.1);
+    letter-spacing: 1px; white-space: nowrap;
+  }
+  tbody td {
+    padding: 13px 12px; font-size: 14px; border-bottom: 1px solid rgba(255,255,255,.05);
+    font-variant-numeric: tabular-nums;
+  }
+  tbody tr { transition: background .2s; }
+  tbody tr:hover { background: rgba(168, 85, 247, .10); }
+  tbody tr:last-child td { border-bottom: none; }
+
+  .ip-cell { display: flex; align-items: center; gap: 10px; }
+  .ip-badge {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    background: linear-gradient(135deg, #7c3aed, #d946ef);
+    color: #fff; box-shadow: 0 0 14px rgba(168,85,247,.45);
+  }
+  .ip-text { font-family: "SF Mono", Consolas, monospace; font-weight: 600; }
+  .online-tag {
+    font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: rgba(34,197,94,.15); color: #4ade80; border: 1px solid rgba(34,197,94,.35);
+  }
+  .count-chip {
+    display: inline-flex; min-width: 40px; justify-content: center;
+    padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700;
+    background: linear-gradient(135deg, rgba(124,58,237,.35), rgba(217,70,239,.35));
+    color: #f5d0fe; border: 1px solid rgba(240,171,252,.3);
+  }
+  .empty, .error {
+    text-align: center; padding: 50px 0; color: var(--text-dim); font-size: 14px;
+  }
+  .error { color: #fda4af; }
+
+  footer {
+    text-align: center; font-size: 12px; color: rgba(185,166,217,.55);
+    padding-top: 8px;
+  }
+
+  @media (max-width: 720px) {
+    .stats { grid-template-columns: 1fr; }
+    .card .num { font-size: 36px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="bg-orbs">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+<canvas class="stars" id="stars"></canvas>
+
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="logo">清</div>
+      <div>
+        <h1>清辞内核 · 实时使用监控</h1>
+        <p>QINGCI KERNEL LIVE USAGE DASHBOARD</p>
+      </div>
+    </div>
+    <div class="status-pill">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">连接中…</span>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="card">
+      <div class="label">实时在线人数</div>
+      <div class="num" id="numOnline">0</div>
+      <div class="sub">5 分钟内有活跃请求的独立 IP</div>
+    </div>
+    <div class="card">
+      <div class="label">今日使用人次</div>
+      <div class="num" id="numTotal">0</div>
+      <div class="sub">今日累计使用次数（<b id="subUnique">0</b> 个独立 IP）</div>
+    </div>
+    <div class="card">
+      <div class="label">今日独立 IP</div>
+      <div class="num" id="numUnique">0</div>
+      <div class="sub">去重后的使用人数</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head">
+      <div class="panel-title">
+        🌐 今日使用人的 IP
+        <span class="tag" id="todayTag">--</span>
+      </div>
+      <div class="refresh">每 5 秒自动刷新 · <span id="countdown">5</span>s</div>
+    </div>
+    <div id="ipTable">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:48px">#</th>
+            <th>IP 地址</th>
+            <th>今日访问次数</th>
+            <th>最近活跃</th>
+            <th>状态</th>
+          </tr>
+        </thead>
+        <tbody id="ipBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="emptyBox" style="display:none">今日暂无使用记录，打开 App 后会自动显示在这里 ✨</div>
+    <div class="error" id="errorBox" style="display:none">无法连接到统计服务端，请确认 server.py 已启动。</div>
+  </div>
+
+  <footer>清辞内核 · 使用统计服务 <span id="serverTime">--</span></footer>
+</div>
+
+<script>
+// ============ 星尘粒子背景 ============
+(function () {
+  const canvas = document.getElementById('stars');
+  const ctx = canvas.getContext('2d');
+  let stars = [];
+  function resize() {
+    canvas.width = innerWidth; canvas.height = innerHeight;
+    stars = Array.from({ length: 90 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      r: Math.random() * 1.6 + 0.3,
+      s: Math.random() * 0.35 + 0.08,
+      a: Math.random()
+    }));
+  }
+  resize();
+  addEventListener('resize', resize);
+  (function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const st of stars) {
+      st.y -= st.s; st.a += 0.008;
+      if (st.y < -5) { st.y = canvas.height + 5; st.x = Math.random() * canvas.width; }
+      ctx.beginPath();
+      ctx.arc(st.x, st.y, st.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(216, 180, 254, ' + (0.35 + 0.5 * Math.abs(Math.sin(st.a))) + ')';
+      ctx.fill();
+    }
+    requestAnimationFrame(draw);
+  })();
+})();
+
+// ============ 数字滚动动画 ============
+function animateNum(el, target) {
+  const start = parseFloat(el.textContent) || 0;
+  if (start === target) return;
+  const t0 = performance.now(), dur = 700;
+  function step(t) {
+    const p = Math.min((t - t0) / dur, 1);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(start + (target - start) * ease);
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// ============ 数据拉取 ============
+let countdown = 5;
+function tick() {
+  document.getElementById('countdown').textContent = countdown;
+  if (countdown <= 0) { countdown = 5; fetchStats(); }
+  countdown--;
+}
+
+async function fetchStats() {
+  try {
+    const res = await fetch('/api/stats', { cache: 'no-store' });
+    if (!res.ok) throw new Error('bad status');
+    const d = await res.json();
+
+    // 状态灯
+    const dot = document.getElementById('statusDot');
+    dot.classList.remove('off');
+    document.getElementById('statusText').textContent = '监测中 · ' + d.server_time.slice(11);
+
+    // 数字
+    animateNum(document.getElementById('numOnline'), d.online);
+    animateNum(document.getElementById('numTotal'), d.today_total);
+    animateNum(document.getElementById('numUnique'), d.today_unique);
+    document.getElementById('subUnique').textContent = d.today_unique;
+    document.getElementById('todayTag').textContent = d.today;
+    document.getElementById('serverTime').textContent = '· ' + d.server_time;
+
+    // IP 列表
+    const body = document.getElementById('ipBody');
+    const empty = document.getElementById('emptyBox');
+    const error = document.getElementById('errorBox');
+    error.style.display = 'none';
+    document.getElementById('ipTable').style.display = 'block';
+
+    if (!d.today_ips || d.today_ips.length === 0) {
+      document.getElementById('ipTable').style.display = 'none';
+      empty.style.display = 'block';
+      return;
+    }
+    empty.style.display = 'none';
+
+    const onlineSet = new Set(d.online_ips || []);
+    body.innerHTML = d.today_ips.map((it, i) => {
+      const online = onlineSet.has(it.ip);
+      return '<tr>' +
+        '<td style="color:var(--text-dim)">' + (i + 1) + '</td>' +
+        '<td><div class="ip-cell"><div class="ip-badge">IP</div>' +
+             '<span class="ip-text">' + esc(it.ip) + '</span></div></td>' +
+        '<td><span class="count-chip">' + it.count + ' 次</span></td>' +
+        '<td>' + esc(it.last) + '</td>' +
+        '<td>' + (online ? '<span class="online-tag">● 在线</span>' : '<span style="color:var(--text-dim)">离线</span>') + '</td>' +
+        '</tr>';
+    }).join('');
+  } catch (e) {
+    const dot = document.getElementById('statusDot');
+    dot.classList.add('off');
+    document.getElementById('statusText').textContent = '连接失败';
+    document.getElementById('ipTable').style.display = 'none';
+    document.getElementById('emptyBox').style.display = 'none';
+    document.getElementById('errorBox').style.display = 'block';
+  }
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+fetchStats();
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
